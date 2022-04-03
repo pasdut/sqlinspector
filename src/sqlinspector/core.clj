@@ -3,6 +3,40 @@
   (:require [next.jdbc :as jdbc])
   )
 
+(def db
+  "Connection configuration of the database.
+  (currently hardcoded)"
+  {:dbtype "sqlserver"
+           :user "test_user"
+           :password "test123!"
+           :host "127.0.0.1"
+           :encrypt false
+           :dbname "test_db"})
+
+(def ds
+  (jdbc/get-datasource db))
+
+(defn retrieve-all-tables
+  []
+  (jdbc/execute! ds [(str "select name, create_date, modify_date as table_name \n"
+                          "from sys.tables order by name")]))
+
+(defn retrieve-table-columns
+  [table-name]
+  (jdbc/execute! ds
+                 [(str "select \n"
+                       "  c.column_id, \n"
+                       "  c.name as column_name, \n"
+                       "  t.[name] as type_name, \n"
+                       "  c.max_length, \n"
+                       "  c.is_nullable, \n"
+                       "  c.is_identity \n"
+                       "from sys.columns c \n"
+                       "join sys.types t on t.system_type_id = c.system_type_id \n"
+                       "where c.[object_id] = object_id(?) \n"
+                       "order by c.column_id")
+                  table-name]))
+
 (defn -main
   "I don't do a whole lot ... yet."
   [& args]
@@ -44,6 +78,9 @@
                           "    constraint df_t_customer_address default (0), \n"
                           "  info varchar(250))")])
 
+  ;; check if the new functions work as expected
+  (retrieve-all-tables)
+  (retrieve-table-columns "t_customer")
 
 
   )
