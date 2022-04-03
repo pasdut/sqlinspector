@@ -14,19 +14,10 @@
 ;;----------------------------------------------------------------------------------------
 (comment
 
-  ;; the connection parameters
-  (def db {:dbtype "sqlserver"
-           :user "test_user"
-           :password "test123!"
-           :host "127.0.0.1"
-           :encrypt false
-           :dbname "test_db"})
-  (def ds (jdbc/get-datasource db))
-
-  ;; test with the most simple select
+  ;; This can be used to check if we can still connect to the database
   (jdbc/execute! ds ["select 123 as just_a_number"])
 
-  ;; create some tables
+  ;; These tables are created to have something in the database
   (jdbc/execute! ds [(str "create table t_customer ( \n"
                           "  id_customer int not null identity(1,1) \n"
                           "    constraint pk_t_customer primary key, \n"
@@ -53,23 +44,6 @@
                           "    constraint df_t_customer_address default (0), \n"
                           "  info varchar(250))")])
 
-  ;; get table names
-  (jdbc/execute! ds [(str "select name, create_date, modify_date as table_name \n"
-                          "from sys.tables order by name") ])
 
-  ;; get columns of a table
-  (let [table-name "t_customer"]
-    (jdbc/execute! ds
-                   [(str "select \n"
-                         "  c.column_id, \n"
-                         "  c.name as column_name, \n"
-                         "  t.[name] as type_name, \n"
-                         "  c.max_length, \n"
-                         "  c.is_nullable, \n"
-                         "  c.is_identity \n"
-                         "from sys.columns c \n"
-                         "join sys.types t on t.system_type_id = c.system_type_id \n"
-                         "where c.[object_id] = object_id(?) \n"
-                         "order by c.column_id")
-                    table-name]))
+
   )
