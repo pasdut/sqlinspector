@@ -38,16 +38,59 @@
                        "order by c.column_id")
                   table-name]))
 
+(def *state
+  (atom {:table-filter ""
+         :selected-table ""}))
+
+(defn tables-view [{:keys [table-filter]}]
+  {:fx/type :v-box
+   :children [{:fx/type :label
+               :text "Table filter:"}
+              {:fx/type :text-field
+               :text table-filter}
+              {:fx/type :label
+               :text "Tables:"}]})
+
+
+(defn columns-view [{:keys [selected-table]}]
+  {:fx/type :v-box
+   :children [{:fx/type :label
+               :text (str "Columns for table: " selected-table)}]})
+
+(defn root-view [{{:keys [table-filter selected-table]} :state}]
+  {:fx/type :stage
+   :showing true
+   :title "SQL inspector"
+   :width 500
+   :height 300
+   :scene {:fx/type :scene
+           :root {:fx/type :v-box
+                  :children [{:fx/type :split-pane
+                              :items [{:fx/type tables-view
+                                       :table-filter table-filter}
+                                      {:fx/type columns-view
+                                       :selected-table selected-table}]}]}}})
+(def renderer
+  (fx/create-renderer
+   :middleware (fx/wrap-map-desc (fn [state]
+                                   {:fx/type root-view
+                                    :state state}))))
+
+(defn initialize-cljfx []
+  (fx/mount-renderer *state renderer))
+
 (defn -main
-  "I don't do a whole lot ... yet."
   [& args]
-  (println "Hello, World!"))
+  (initialize-cljfx))
 
 ;;----------------------------------------------------------------------------------------
 ;; Below is a big chunk of comment. This is used to enter expressions in the REPL directly
 ;; from within the Editor.
 ;;----------------------------------------------------------------------------------------
 (comment
+
+  ;; run the application from the REPL
+  (-main)
 
   ;; This can be used to check if we can still connect to the database
   (jdbc/execute! ds ["select 123 as just_a_number"])
