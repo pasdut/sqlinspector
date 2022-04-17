@@ -47,9 +47,13 @@
    :children [{:fx/type :label
                :text "Table filter:"}
               {:fx/type :text-field
-               :text table-filter}
+               :text table-filter
+               :on-text-changed #(swap! *state assoc :table-filter %)}
               {:fx/type :label
-               :text "Tables:"}]})
+               :text "Tables:"}
+              ;; temporary added
+              {:fx/type :label
+               :text (str ":table-filter contains " table-filter)}]})
 
 
 (defn columns-view [{:keys [selected-table]}]
@@ -91,6 +95,13 @@
 
   ;; run the application from the REPL
   (-main)
+
+  ;; Whenever we changed the user interface we must rerender
+  ;; This is something we will often do, so keep this in the comment
+  (renderer)
+
+  ;; Manually set the filter
+  (swap! *state assoc :table-filter "Blah blah")
 
   ;; This can be used to check if we can still connect to the database
   (jdbc/execute! ds ["select 123 as just_a_number"])
