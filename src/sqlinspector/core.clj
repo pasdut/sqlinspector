@@ -48,7 +48,8 @@
                :text "Table filter:"}
               {:fx/type :text-field
                :text table-filter
-               :on-text-changed #(swap! *state assoc :table-filter %)}
+               ;; use a map
+               :on-text-changed {:event/type :update-table-filter}}
               {:fx/type :label
                :text "Tables:"}
               ;; temporary added
@@ -74,11 +75,18 @@
                                        :table-filter table-filter}
                                       {:fx/type columns-view
                                        :selected-table selected-table}]}]}}})
+
+(defn map-event-handler [event]
+  (println "Event : " event )
+  (case (:event/type event)
+    :update-table-filter  (swap! *state assoc :table-filter (:fx/event event))))
+
 (def renderer
   (fx/create-renderer
    :middleware (fx/wrap-map-desc (fn [state]
                                    {:fx/type root-view
-                                    :state state}))))
+                                    :state state}))
+   :opts {:fx.opt/map-event-handler map-event-handler}))
 
 (defn initialize-cljfx []
   (fx/mount-renderer *state renderer))
