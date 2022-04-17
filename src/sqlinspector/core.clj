@@ -49,7 +49,8 @@
               {:fx/type :text-field
                :text table-filter
                ;; use a map
-               :on-text-changed {:event/type :update-table-filter}}
+               :on-text-changed {:event/type :update-table-filter
+                                 :fx/sync true}}
               {:fx/type :label
                :text "Tables:"}
               ;; temporary added
