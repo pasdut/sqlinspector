@@ -76,11 +76,21 @@
                                        :table-filter table-filter}
                                       {:fx/type columns-view
                                        :selected-table selected-table}]}]}}})
+(defn event-handler [e]
+  (println "event-handler:" e)
+  (let [{:keys [event/type fx/event state]} e]
+    (case type
+      :update-table-filter {:state (assoc state :table-filter event)})))
 
-(defn map-event-handler [event]
-  (println "Event : " event )
-  (case (:event/type event)
-    :update-table-filter  (swap! *state assoc :table-filter (:fx/event event))))
+
+;; Notice this is "def" and not "defn" as wrap-co-effects and wrap-effects
+;; return a function.
+(def map-event-handler
+    (-> event-handler
+        (fx/wrap-co-effects
+         {:state (fx/make-deref-co-effect *state)})
+        (fx/wrap-effects
+         {:state (fn [state _] (reset! *state state))})))
 
 (def renderer
   (fx/create-renderer
@@ -111,6 +121,9 @@
 
   ;; Manually set the filter
   (swap! *state assoc :table-filter "Blah blah")
+
+  ;; Test if the event handler gives us the expected result
+  (event-handler {:event/type :update-table-filter :fx/event "xyz" :state {:table-filter "abc"}})
 
   ;; This can be used to check if we can still connect to the database
   (jdbc/execute! ds ["select 123 as just_a_number"])
