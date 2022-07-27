@@ -76,6 +76,7 @@
                                        :table-filter table-filter}
                                       {:fx/type columns-view
                                        :selected-table selected-table}]}]}}})
+
 (defn event-handler [e]
   (println "event-handler:" e)
   (let [{:keys [event/type fx/event state]} e]
