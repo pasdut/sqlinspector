@@ -1,7 +1,8 @@
 (ns sqlinspector.core
   (:gen-class)
   (:require [next.jdbc :as jdbc]
-            [cljfx.api :as fx])
+            [cljfx.api :as fx]
+            [cljfx.ext.table-view :as fx.ext.table-view])
   )
 
 (def db
@@ -19,7 +20,7 @@
 
 (defn retrieve-all-tables
   []
-  (jdbc/execute! ds [(str "select name, create_date, modify_date as table_name \n"
+  (jdbc/execute! ds [(str "select name as table_name, create_date, modify_date \n"
                           "from sys.tables order by name")]))
 
 (defn retrieve-table-columns
@@ -40,9 +41,10 @@
 
 (def *state
   (atom {:table-filter ""
-         :selected-table ""}))
+         :selected-table ""
+         :tables []}))
 
-(defn tables-view [{:keys [table-filter]}]
+(defn tables-view [{:keys [table-filter tables]}]
   {:fx/type :v-box
    :children [{:fx/type :label
                :text "Table filter:"}
@@ -55,7 +57,18 @@
                :text "Tables:"}
               ;; temporary added
               {:fx/type :label
-               :text (str ":table-filter contains " table-filter)}]})
+               :text (str ":table-filter contains " table-filter)}
+              {:fx/type fx.ext.table-view/with-selection-props
+               :props {:selection-mode :single}
+               :desc {:fx/type :table-view
+                      :columns [{:fx/type :table-column
+                                 :text "Tablename"
+                                 :cell-value-factory identity
+                                 :cell-factory {:fx/cell-type :table-cell
+                                                :describe (fn [table-data]
+                                                            #_(println "Data for the cell Tablename is:" table-data)
+                                                            {:text (:table_name table-data) })}}]
+                      :items tables }}]})
 
 
 (defn columns-view [{:keys [selected-table]}]
@@ -63,7 +76,7 @@
    :children [{:fx/type :label
                :text (str "Columns for table: " selected-table)}]})
 
-(defn root-view [{{:keys [table-filter selected-table]} :state}]
+(defn root-view [{{:keys [table-filter selected-table tables]} :state}]
   {:fx/type :stage
    :showing true
    :title "SQL inspector"
@@ -73,7 +86,8 @@
            :root {:fx/type :v-box
                   :children [{:fx/type :split-pane
                               :items [{:fx/type tables-view
-                                       :table-filter table-filter}
+                                       :table-filter table-filter
+                                       :tables tables}
                                       {:fx/type columns-view
                                        :selected-table selected-table}]}]}}})
 
@@ -105,6 +119,7 @@
 
 (defn -main
   [& args]
+  (swap! *state assoc :tables (retrieve-all-tables))
   (initialize-cljfx))
 
 ;;----------------------------------------------------------------------------------------
