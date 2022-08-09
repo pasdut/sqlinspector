@@ -7,6 +7,7 @@
                  [com.github.seancorfield/next.jdbc "1.2.772"]
                  [com.microsoft.sqlserver/mssql-jdbc "10.2.0.jre11"]
                  [cljfx "1.7.16"]
+                 [org.clojure/core.cache "0.7.1"]
                  ]
   :main ^:skip-aot sqlinspector.core
   :target-path "target/%s"

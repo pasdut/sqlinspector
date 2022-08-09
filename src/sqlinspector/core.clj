@@ -2,7 +2,8 @@
   (:gen-class)
   (:require [next.jdbc :as jdbc]
             [cljfx.api :as fx]
-            [cljfx.ext.table-view :as fx.ext.table-view])
+            [cljfx.ext.table-view :as fx.ext.table-view]
+            [clojure.core.cache :as cache])
   )
 
 (def db
@@ -40,16 +41,18 @@
                   table-name]))
 
 (def *state
-  (atom {:table-filter ""
-         :selected-table ""
-         :tables []}))
+  (atom (fx/create-context
+         {:table-filter ""
+          :selected-table ""
+          :tables []}
+         cache/lru-cache-factory)))
 
-(defn tables-view [{:keys [table-filter tables]}]
+(defn tables-view [{:keys [fx/context]}]
   {:fx/type :v-box
    :children [{:fx/type :label
                :text "Table filter:"}
               {:fx/type :text-field
-               :text table-filter
+               :text (fx/sub-val context :table-filter)
                ;; use a map
                :on-text-changed {:event/type :update-table-filter
                                  :fx/sync true}}
@@ -57,7 +60,7 @@
                :text "Tables:"}
               ;; temporary added
               {:fx/type :label
-               :text (str ":table-filter contains " table-filter)}
+               :text (str ":table-filter contains " (fx/sub-val context :table-filter))}
               {:fx/type fx.ext.table-view/with-selection-props
                :props {:selection-mode :single}
                :desc {:fx/type :table-view
@@ -68,15 +71,15 @@
                                                 :describe (fn [table-data]
                                                             #_(println "Data for the cell Tablename is:" table-data)
                                                             {:text (:table_name table-data) })}}]
-                      :items tables }}]})
+                      :items (fx/sub-val context :tables)}}]})
 
 
-(defn columns-view [{:keys [selected-table]}]
+(defn columns-view [{:keys [fx/context]}]
   {:fx/type :v-box
    :children [{:fx/type :label
-               :text (str "Columns for table: " selected-table)}]})
+               :text (str "Columns for table: " (fx/sub-val context :selected-table))}]})
 
-(defn root-view [{{:keys [table-filter selected-table tables]} :state}]
+(defn root-view [_]
   {:fx/type :stage
    :showing true
    :title "SQL inspector"
@@ -85,17 +88,14 @@
    :scene {:fx/type :scene
            :root {:fx/type :v-box
                   :children [{:fx/type :split-pane
-                              :items [{:fx/type tables-view
-                                       :table-filter table-filter
-                                       :tables tables}
-                                      {:fx/type columns-view
-                                       :selected-table selected-table}]}]}}})
+                              :items [{:fx/type tables-view}
+                                      {:fx/type columns-view}]}]}}})
 
 (defn event-handler [e]
   (println "event-handler:" e)
-  (let [{:keys [event/type fx/event state]} e]
+  (let [{:keys [event/type fx/event fx/context]} e]
     (case type
-      :update-table-filter {:state (assoc state :table-filter event)})))
+      :update-table-filter {:context (fx/swap-context context assoc :table-filter event)})))
 
 
 ;; Notice this is "def" and not "defn" as wrap-co-effects and wrap-effects
@@ -103,23 +103,29 @@
 (def map-event-handler
     (-> event-handler
         (fx/wrap-co-effects
-         {:state (fx/make-deref-co-effect *state)})
+         {:fx/context (fx/make-deref-co-effect *state)})
         (fx/wrap-effects
-         {:state (fn [state _] (reset! *state state))})))
+         {:context (fx/make-reset-effect *state)
+          :dispatch fx/dispatch-effect})))
 
 (def renderer
   (fx/create-renderer
-   :middleware (fx/wrap-map-desc (fn [state]
-                                   {:fx/type root-view
-                                    :state state}))
-   :opts {:fx.opt/map-event-handler map-event-handler}))
+   :middleware (comp
+                ;; Pass context to every lifecycle as part of option map
+                fx/wrap-context-desc
+                (fx/wrap-map-desc (fn [_]{:fx/type root-view})))
+   :opts {:fx.opt/map-event-handler map-event-handler
+          :fx.opt/type->lifecycle #(or (fx/keyword->lifecycle %)
+                                       ;; For functions in ':fx/type' values, pass
+                                       ;; context from option map to these functions
+                                       (fx/fn->lifecycle-with-context %))}))
 
 (defn initialize-cljfx []
   (fx/mount-renderer *state renderer))
 
 (defn -main
   [& args]
-  (swap! *state assoc :tables (retrieve-all-tables))
+  (reset! *state (fx/swap-context @*state assoc :tables (retrieve-all-tables)))
   (initialize-cljfx))
 
 ;;----------------------------------------------------------------------------------------
@@ -136,7 +142,7 @@
   (renderer)
 
   ;; Manually set the filter
-  (swap! *state assoc :table-filter "Blah blah")
+  (reset! *state (fx/swap-context @*state assoc :table-filter "Blah blah"))
 
   ;; Test if the event handler gives us the expected result
   (event-handler {:event/type :update-table-filter :fx/event "xyz" :state {:table-filter "abc"}})
