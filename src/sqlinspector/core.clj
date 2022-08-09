@@ -47,6 +47,14 @@
           :tables []}
          cache/lru-cache-factory)))
 
+(defn subs-filtered-tables
+  "Returns all tables that satisfy to the search text."
+  [context]
+  (let [tables (fx/sub-val context :tables)
+        table-filter (fx/sub-val context :table-filter)
+        table-filter-pattern (re-pattern (str "(?i).*" table-filter ".*"))]
+    (filter #(re-matches table-filter-pattern (:table_name %)) tables)))
+
 (defn tables-view [{:keys [fx/context]}]
   {:fx/type :v-box
    :children [{:fx/type :label
@@ -71,7 +79,7 @@
                                                 :describe (fn [table-data]
                                                             #_(println "Data for the cell Tablename is:" table-data)
                                                             {:text (:table_name table-data) })}}]
-                      :items (fx/sub-val context :tables)}}]})
+                      :items (fx/sub-ctx context subs-filtered-tables)}}]})
 
 
 (defn columns-view [{:keys [fx/context]}]
@@ -180,6 +188,8 @@
   ;; check if the new database functions work as expected
   (retrieve-all-tables)
   (retrieve-table-columns "t_customer")
+
+
 
 
 )
