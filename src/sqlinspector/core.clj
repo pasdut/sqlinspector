@@ -55,6 +55,18 @@
         table-filter-pattern (re-pattern (str "(?i).*" table-filter ".*"))]
     (filter #(re-matches table-filter-pattern (:table_name %)) tables)))
 
+(defn subs-visible-table-to-select
+  "Return the table from the visible table list that must be selected"
+  [context]
+  (let [tables (fx/sub-ctx context subs-filtered-tables)
+        first-table (first tables)
+        selected-table (fx/sub-val context :selected-table)
+        contains-selected-table (some? (some #(= (:table_name selected-table) (:table_name %)) tables)) ]
+    (println "subs-visible-table-to-select (contains-selected-table = " contains-selected-table ")")
+    (if contains-selected-table
+                             selected-table
+                             first-table)))
+
 (defn tables-view [{:keys [fx/context]}]
   {:fx/type :v-box
    :children [{:fx/type :label
@@ -70,7 +82,9 @@
               {:fx/type :label
                :text (str ":table-filter contains " (fx/sub-val context :table-filter))}
               {:fx/type fx.ext.table-view/with-selection-props
-               :props {:selection-mode :single}
+               :props {:selection-mode :single
+                       :on-selected-item-changed {:event/type :select-table}
+                       :selected-item (fx/sub-val context :selected-table)}
                :desc {:fx/type :table-view
                       :columns [{:fx/type :table-column
                                  :text "Tablename"
@@ -85,7 +99,8 @@
 (defn columns-view [{:keys [fx/context]}]
   {:fx/type :v-box
    :children [{:fx/type :label
-               :text (str "Columns for table: " (fx/sub-val context :selected-table))}]})
+               :text (str "Columns for table: "
+                          (:table_name (fx/sub-val context :selected-table)))}]})
 
 (defn root-view [_]
   {:fx/type :stage
@@ -99,12 +114,27 @@
                               :items [{:fx/type tables-view}
                                       {:fx/type columns-view}]}]}}})
 
-(defn event-handler [e]
-  (println "event-handler:" e)
-  (let [{:keys [event/type fx/event fx/context]} e]
-    (case type
-      :update-table-filter {:context (fx/swap-context context assoc :table-filter event)})))
 
+(defmulti event-handler :event/type)
+
+(defmethod event-handler :default [e]
+  (println "Unhandled event")
+  (prn e))
+
+(defmethod event-handler :select-visible-table [{:keys [fx/context fx/event]}]
+  (let [table (fx/sub-ctx context subs-visible-table-to-select)]
+    (println ":select-visible-table --> table = " (:table_name table))
+    {:context (fx/swap-context context assoc :selected-table table)}))
+
+(defmethod event-handler :update-table-filter [{:keys [fx/context fx/event]}]
+  (println ":update-table-filter --->" event)
+  {:context (fx/swap-context context assoc :table-filter event)
+   :dispatch {:event/type :select-visible-table}})
+
+
+(defmethod event-handler :select-table [{:keys [fx/context fx/event]}]
+  (println ":select-table --> " (:table_name event))
+  {:context (fx/swap-context context assoc :selected-table event)})
 
 ;; Notice this is "def" and not "defn" as wrap-co-effects and wrap-effects
 ;; return a function.
@@ -155,6 +185,19 @@
   ;; Test if the event handler gives us the expected result
   (event-handler {:event/type :update-table-filter :fx/event "xyz" :state {:table-filter "abc"}})
 
+  ;; Tests for step 12.3
+  (reset! *state (fx/swap-context @*state assoc :table-filter ""))
+  (println (fx/sub-ctx @*state subs-visible-table-to-select))
+
+  (reset! *state (fx/swap-context @*state assoc :table-filter "cus"))
+  (println (fx/sub-ctx @*state subs-visible-table-to-select))
+
+  (reset! *state (fx/swap-context @*state assoc :table-filter ""))
+  (reset! *state (fx/swap-context @*state assoc :selected-table "t_customer_address"))
+
+
+
+  ;;
   ;; This can be used to check if we can still connect to the database
   (jdbc/execute! ds ["select 123 as just_a_number"])
 
