@@ -44,7 +44,8 @@
   (atom (fx/create-context
          {:table-filter ""
           :selected-table ""
-          :tables []}
+          :tables []
+          :columns-for-selected-table []}
          cache/lru-cache-factory)))
 
 (defn subs-filtered-tables
@@ -100,7 +101,39 @@
   {:fx/type :v-box
    :children [{:fx/type :label
                :text (str "Columns for table: "
-                          (:table_name (fx/sub-val context :selected-table)))}]})
+                          (:table_name (fx/sub-val context :selected-table)))}
+              {:fx/type fx.ext.table-view/with-selection-props
+               :props {:selection-mode :multiple}
+               :desc {:fx/type :table-view
+                      :columns [{:fx/type :table-column
+                                 :text "#"
+                                 :cell-value-factory identity
+                                 :cell-factory {:fx/cell-type :table-cell
+                                                :describe (fn [column-data]
+                                                            (println "Data for cell is:" column-data)
+                                                            {:text (str(:column_id column-data))})}}
+                                {:fx/type :table-column
+                                 :text "Column"
+                                 :cell-value-factory identity
+                                 :cell-factory {:fx/cell-type :table-cell
+                                                :describe (fn [column-data] {:text (:column_name column-data)})}}
+                                {:fx/type :table-column
+                                 :text "Type"
+                                 :cell-value-factory identity
+                                 :cell-factory {:fx/cell-type :table-cell
+                                                :describe (fn [column-data] {:text (:type_name column-data)})}}
+                                {:fx/type :table-column
+                                 :text "Size"
+                                 :cell-value-factory identity
+                                 :cell-factory {:fx/cell-type :table-cell
+                                                :describe (fn [column-data]
+                                                            (let [types-with-no-size #{"int" "bit" "date" "datetime"}
+                                                                  hide-size (some? (some #(= (:type_name column-data) %) types-with-no-size))
+                                                                  value (if (true? hide-size)
+                                                                          ""
+                                                                          (str (:max_length column-data)))]
+                                                              {:text value}))}}]
+                      :items (fx/sub-val context :columns-for-selected-table)}}]})
 
 (defn root-view [_]
   {:fx/type :stage
@@ -124,7 +157,8 @@
 (defmethod event-handler :select-visible-table [{:keys [fx/context fx/event]}]
   (let [table (fx/sub-ctx context subs-visible-table-to-select)]
     (println ":select-visible-table --> table = " (:table_name table))
-    {:context (fx/swap-context context assoc :selected-table table)}))
+    {:context (fx/swap-context context assoc :selected-table table)
+     :dispatch {:event/type :refresh-columns :table table}}))
 
 (defmethod event-handler :update-table-filter [{:keys [fx/context fx/event]}]
   (println ":update-table-filter --->" event)
@@ -134,7 +168,24 @@
 
 (defmethod event-handler :select-table [{:keys [fx/context fx/event]}]
   (println ":select-table --> " (:table_name event))
-  {:context (fx/swap-context context assoc :selected-table event)})
+  {:context (fx/swap-context context assoc :selected-table event)
+   :dispatch {:event/type :refresh-columns :table event}})
+
+(defmethod event-handler :refresh-columns [{:keys [fx/context table]}]
+  (println ":refresh-columns for table" (:table_name table))
+  {;; Clear existing columns
+   :context (fx/swap-context context assoc :columns-for-selected-table [])
+   ;; Return an effect to actually retrieve the columns
+   :retrieve-columns (fx/sub-val context :selected-table)})
+
+(defmethod event-handler :set-columns [{:keys [fx/context columns]}]
+  (println ":set-columns " columns)
+  {:context (fx/swap-context context assoc :columns-for-selected-table columns)})
+
+(defn retrieve-columns-effect [table dispatch!]
+  (println "retrieve-columns-effect " table)
+  (dispatch! {:event/type :set-columns
+              :columns (retrieve-table-columns (:table_name table))}))
 
 ;; Notice this is "def" and not "defn" as wrap-co-effects and wrap-effects
 ;; return a function.
@@ -144,7 +195,8 @@
          {:fx/context (fx/make-deref-co-effect *state)})
         (fx/wrap-effects
          {:context (fx/make-reset-effect *state)
-          :dispatch fx/dispatch-effect})))
+          :dispatch fx/dispatch-effect
+          :retrieve-columns retrieve-columns-effect })))
 
 (def renderer
   (fx/create-renderer
